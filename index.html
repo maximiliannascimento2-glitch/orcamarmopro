@@ -9,41 +9,15 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="OrçaMarmo">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2599/2599661.png">
+   
     
     <title>OrçaMarmo</title>
     
     <!-- Configurações PWA Android -->
-    <link rel="manifest" id="my-manifest">
+ 
     
-    <script>
-        // Gerador de Manifesto Dinâmico
-        const manifest = {
-            "name": "OrçaMarmo",
-            "short_name": "OrçaMarmo",
-            "start_url": ".",
-            "display": "standalone",
-            "background_color": "#f0f9ff",
-            "theme_color": "#0ea5e9",
-            "orientation": "portrait",
-            "icons": [
-                {
-                    "src": "https://cdn-icons-png.flaticon.com/512/2599/2599661.png",
-                    "sizes": "192x192",
-                    "type": "image/png"
-                },
-                {
-                    "src": "https://cdn-icons-png.flaticon.com/512/2599/2599661.png",
-                    "sizes": "512x512",
-                    "type": "image/png"
-                }
-            ]
-        };
-        const stringManifest = JSON.stringify(manifest);
-        const blob = new Blob([stringManifest], {type: 'application/json'});
-        const manifestURL = URL.createObjectURL(blob);
-        document.querySelector('#my-manifest').setAttribute('href', manifestURL);
-    </script>
+    <link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/ícone-192.png">
 
     <!-- Dependências -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -1359,4 +1333,5 @@
         root.render(<App />);
     </script>
 </body>
+
 </html>

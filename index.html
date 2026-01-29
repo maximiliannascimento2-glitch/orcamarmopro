@@ -1,0 +1,1362 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0ea5e9">
+    
+    <!-- Configurações PWA iOS -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="OrçaMarmo">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2599/2599661.png">
+    
+    <title>OrçaMarmo</title>
+    
+    <!-- Configurações PWA Android -->
+    <link rel="manifest" id="my-manifest">
+    
+    <script>
+        // Gerador de Manifesto Dinâmico
+        const manifest = {
+            "name": "OrçaMarmo",
+            "short_name": "OrçaMarmo",
+            "start_url": ".",
+            "display": "standalone",
+            "background_color": "#f0f9ff",
+            "theme_color": "#0ea5e9",
+            "orientation": "portrait",
+            "icons": [
+                {
+                    "src": "https://cdn-icons-png.flaticon.com/512/2599/2599661.png",
+                    "sizes": "192x192",
+                    "type": "image/png"
+                },
+                {
+                    "src": "https://cdn-icons-png.flaticon.com/512/2599/2599661.png",
+                    "sizes": "512x512",
+                    "type": "image/png"
+                }
+            ]
+        };
+        const stringManifest = JSON.stringify(manifest);
+        const blob = new Blob([stringManifest], {type: 'application/json'});
+        const manifestURL = URL.createObjectURL(blob);
+        document.querySelector('#my-manifest').setAttribute('href', manifestURL);
+    </script>
+
+    <!-- Dependências -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap');
+        
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f0f9ff; 
+            -webkit-tap-highlight-color: transparent; 
+            overflow-x: hidden;
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+        
+        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+        .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        
+        input, textarea, select { font-size: 16px !important; }
+        
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        
+        button:active { transform: scale(0.96); transition: 0.1s; }
+        
+        input:focus, textarea:focus { ring: 2px; outline: none; border-color: #0ea5e9; }
+        
+        /* Wizard Specific Styles */
+        .wizard-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);
+            z-index: 9999; display: flex; align-items: center; justify-content: center;
+            padding: 20px;
+        }
+        .wizard-card {
+            background: white; width: 100%; max-width: 400px;
+            border-radius: 2rem; padding: 2rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            animation: fadeIn 0.3s ease-out;
+            border: 1px solid rgba(255,255,255,0.1);
+            max-height: 90vh; overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDWX6AzW_cEVT3WjZ0Pwz21SbyjYwBproU",
+            authDomain: "app-marmoraria-9fbc6.firebaseapp.com",
+            databaseURL: "https://app-marmoraria-9fbc6-default-rtdb.firebaseio.com",
+            projectId: "app-marmoraria-9fbc6",
+            storageBucket: "app-marmoraria-9fbc6.firebasestorage.app",
+            messagingSenderId: "6152585818",
+            appId: "1:6152585818:web:9995e5cec736e50f874e63"
+        };
+
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const database = firebase.database();
+
+        // --- Componentes UI ---
+        const Icon = React.memo(({ name, size = 20, className = "" }) => {
+            useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
+            return <span className={`inline-flex items-center justify-center ${className}`} style={{ width: size, height: size }}><i data-lucide={name} style={{ width: size, height: size }}></i></span>;
+        });
+
+        const WhatsAppIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        );
+
+        const masks = {
+            cep: (v) => v.replace(/\D/g, '').replace(/^(\d{5})(\d)/, '$1-$2').substr(0, 9),
+            phone: (v) => {
+                const r = v.replace(/\D/g, '');
+                if (r.length > 10) return r.replace(/^(\d{2})(\d{5})(\d{4}).*/, '($1) $2-$3');
+                return r.replace(/^(\d{2})(\d{4})(\d{0,4}).*/, '($1) $2-$3').substr(0, 15);
+            },
+            cnpj: (v) => v.replace(/\D/g, '').replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d)/, '$1-$2').substr(0, 18),
+        };
+
+        // --- Wizard Logic Component (MODO GUIADO) ---
+        const WizardFlow = ({ isOpen, onClose, onFinish, initialData, companyMaterials, companyServices }) => {
+            if (!isOpen) return null;
+
+            // Estados do Mago
+            const [stepHistory, setStepHistory] = useState(['CLIENT_NAME']); // Pilha de histórico
+            const [tempData, setTempData] = useState({
+                clientName: '', clientPhone: '', clientDoc: '',
+                currentItem: { material: '', width: '', length: '', price: '', cost: '', quantity: 1 },
+                currentService: { description: '', price: '', cost: '', quantity: 1 },
+                items: [],
+                services: [],
+                closing: { margin: '', loss: '', shipping: '', payment: '', delivery: '', observations: '' }
+            });
+            const inputRef = useRef(null);
+
+            const currentStep = stepHistory[stepHistory.length - 1];
+
+            // Foca no input sempre que o passo mudar
+            useEffect(() => {
+                if (inputRef.current) {
+                    setTimeout(() => inputRef.current.focus(), 100);
+                }
+            }, [currentStep]);
+
+            const goToStep = (nextStep) => {
+                setStepHistory([...stepHistory, nextStep]);
+            };
+
+            const goBack = () => {
+                if (stepHistory.length > 1) {
+                    const newHistory = [...stepHistory];
+                    newHistory.pop();
+                    setStepHistory(newHistory);
+                }
+            };
+
+            // Função para salvar item e ir para Loop
+            const saveItemAndContinue = () => {
+                 const newItem = {
+                     id: Date.now(),
+                     description: tempData.currentItem.material,
+                     width: parseFloat(tempData.currentItem.width.replace(',','.')) || 0,
+                     length: parseFloat(tempData.currentItem.length.replace(',','.')) || 0,
+                     priceM2: parseFloat(tempData.currentItem.price.replace(',','.')) || 0,
+                     costM2: parseFloat(tempData.currentItem.cost.replace(',','.')) || 0,
+                     quantity: Number(tempData.currentItem.quantity) || 1,
+                     area: (parseFloat(tempData.currentItem.width.replace(',','.')) || 0) * (parseFloat(tempData.currentItem.length.replace(',','.')) || 0),
+                     isUnit: false 
+                };
+                setTempData(prev => ({ 
+                    ...prev, 
+                    items: [...prev.items, newItem],
+                    currentItem: { material: '', width: '', length: '', price: '', cost: '', quantity: 1 } 
+                }));
+                goToStep('LOOP_DECISION');
+            };
+
+            const saveServiceAndContinue = () => {
+                 const newService = {
+                     id: Date.now(),
+                     description: tempData.currentService.description,
+                     price: parseFloat(tempData.currentService.price.replace(',','.')) || 0,
+                     cost: parseFloat(tempData.currentService.cost.replace(',','.')) || 0,
+                     quantity: parseFloat(tempData.currentService.quantity) || 1,
+                };
+                setTempData(prev => ({ 
+                    ...prev, 
+                    services: [...prev.services, newService],
+                    currentService: { description: '', price: '', cost: '', quantity: 1 } 
+                }));
+                goToStep('SERVICE_LOOP_DECISION');
+            };
+
+            const handleNext = () => {
+                switch (currentStep) {
+                    // CLIENTE
+                    case 'CLIENT_NAME':
+                        if (!tempData.clientName) return alert('Digite o nome');
+                        goToStep('CLIENT_PHONE');
+                        break;
+                    case 'CLIENT_PHONE':
+                        goToStep('CLIENT_DOC');
+                        break;
+                    case 'CLIENT_DOC':
+                        goToStep('MATERIAL_SELECT');
+                        break;
+                    
+                    // MATERIAL
+                    case 'MATERIAL_SELECT':
+                        if (!tempData.currentItem.material) return alert('Escolha um material');
+                        goToStep('ITEM_QUANTITY');
+                        break;
+                    case 'ITEM_QUANTITY':
+                        goToStep('ITEM_WIDTH');
+                        break;
+                    case 'ITEM_WIDTH':
+                         if (!tempData.currentItem.width) return alert('Informe a largura');
+                         goToStep('ITEM_LENGTH');
+                         break;
+                    case 'ITEM_LENGTH':
+                         if (!tempData.currentItem.length) return alert('Informe o comprimento');
+                         goToStep('ITEM_PRICE');
+                         break;
+                    case 'ITEM_PRICE':
+                         if (!tempData.currentItem.price) return alert('Informe o preço');
+                         goToStep('ASK_COST');
+                         break;
+                    
+                    // SERVIÇOS
+                    case 'SERVICE_NAME':
+                         if (!tempData.currentService.description) return alert('Informe a descrição');
+                         goToStep('SERVICE_QTD');
+                         break;
+                    case 'SERVICE_QTD':
+                         goToStep('SERVICE_PRICE');
+                         break;
+                    case 'SERVICE_PRICE':
+                         if (!tempData.currentService.price) return alert('Informe o preço');
+                         goToStep('ASK_SERVICE_COST');
+                         break;
+                    
+                    // FECHAMENTO
+                    case 'CLOSING_MARGIN':
+                         goToStep('CLOSING_LOSS');
+                         break;
+                    case 'CLOSING_LOSS':
+                         goToStep('CLOSING_SHIPPING');
+                         break;
+                    case 'CLOSING_SHIPPING':
+                         goToStep('CLOSING_PAYMENT');
+                         break;
+                    case 'CLOSING_PAYMENT':
+                         goToStep('CLOSING_OBS'); 
+                         break;
+                    case 'CLOSING_OBS':
+                         goToStep('CLOSING_DELIVERY');
+                         break;
+                    case 'CLOSING_DELIVERY':
+                         goToStep('SUMMARY');
+                         break;
+                    default:
+                        break;
+                }
+            };
+
+            const finishWizard = () => {
+                onFinish(tempData);
+                onClose();
+            };
+
+            // Renderizadores de Passo
+            const renderContent = () => {
+                switch (currentStep) {
+                    // --- CLIENTE ---
+                    case 'CLIENT_NAME':
+                        return (
+                            <>
+                                <Icon name="user" size={48} className="text-sky-600 mb-4 bg-sky-100 p-3 rounded-2xl" />
+                                <h2 className="text-2xl font-black text-gray-800 mb-2 text-center uppercase break-words w-full">QUEM É O CLIENTE?</h2>
+                                <input ref={inputRef} className="w-full text-center text-xl p-4 bg-gray-100 rounded-2xl font-black uppercase mb-6 border-2 border-transparent focus:border-sky-500 focus:bg-white transition-all" placeholder="NOME DO CLIENTE" value={tempData.clientName} onChange={e => setTempData({...tempData, clientName: e.target.value})} onKeyDown={e => e.key === 'Enter' && handleNext()} />
+                                <button onClick={handleNext} className="w-full bg-sky-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg shadow-sky-200 active:scale-95 transition-transform">PRÓXIMO</button>
+                            </>
+                        );
+                    case 'CLIENT_PHONE':
+                        return (
+                            <>
+                                <Icon name="smartphone" size={48} className="text-green-600 mb-4 bg-green-100 p-3 rounded-2xl" />
+                                <h2 className="text-2xl font-black text-gray-800 mb-2 text-center uppercase break-words w-full">QUAL O WHATSAPP?</h2>
+                                <input ref={inputRef} type="tel" className="w-full text-center text-2xl p-4 bg-gray-100 rounded-2xl font-black uppercase mb-6 border-2 border-transparent focus:border-green-500 focus:bg-white transition-all" placeholder="(00) 00000-0000" value={tempData.clientPhone} onChange={e => setTempData({...tempData, clientPhone: masks.phone(e.target.value)})} onKeyDown={e => e.key === 'Enter' && handleNext()} />
+                                <button onClick={handleNext} className="w-full bg-sky-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform">PRÓXIMO</button>
+                                <button onClick={handleNext} className="mt-4 text-gray-400 font-bold text-xs">PULAR</button>
+                            </>
+                        );
+                    case 'CLIENT_DOC':
+                        return (
+                            <>
+                                <Icon name="file-text" size={48} className="text-blue-600 mb-4 bg-blue-100 p-3 rounded-2xl" />
+                                <h2 className="text-2xl font-black text-gray-800 mb-2 text-center uppercase break-words w-full">TEM CPF/CNPJ?</h2>
+                                <input ref={inputRef} type="tel" className="w-full text-center text-xl p-4 bg-gray-100 rounded-2xl font-black uppercase mb-6 border-2 border-transparent focus:border-blue-500 focus:bg-white transition-all" placeholder="CPF OU CNPJ" value={tempData.clientDoc} onChange={e => setTempData({...tempData, clientDoc: e.target.value})} onKeyDown={e => e.key === 'Enter' && handleNext()} />
+                                <button onClick={handleNext} className="w-full bg-sky-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform">PRÓXIMO</button>
+                                <button onClick={handleNext} className="mt-4 text-gray-400 font-bold text-xs">PULAR</button>
+                            </>
+                        );
+                    
+                    // --- MATERIAIS ---
+                    case 'MATERIAL_SELECT':
+                        return (
+                            <>
+                                <Icon name="layers" size={48} className="text-purple-600 mb-4 bg-purple-100 p-3 rounded-2xl" />
+                                <h2 className="text-2xl font-black text-gray-800 mb-2 text-center uppercase break-words w-full">QUAL A PEÇA?</h2>
+                                <input ref={inputRef} list="wizard-materials" className="w-full text-center text-lg p-4 bg-gray-100 rounded-2xl font-black uppercase mb-6 border-2 border-transparent focus:border-purple-500 focus:bg-white transition-all" placeholder="EX: GRANITO SÃO GABRIEL" value={tempData.currentItem.material} onChange={e => setTempData({...tempData, currentItem: {...tempData.currentItem, material: e.target.value.toUpperCase()}})} onKeyDown={e => e.key === 'Enter' && handleNext()} />
+                                <datalist id="wizard-materials">{companyMaterials.map(m => <option key={m} value={m} />)}</datalist>
+                                <button onClick={handleNext} className="w-full bg-sky-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform">PRÓXIMO</button>
+                            </>
+                        );
+                    case 'ITEM_QUANTITY':
+                         return (
+                            <>
+                                <Icon name="hash" size={48} className="text-indigo-600 mb-4 bg-indigo-100 p-3 rounded-2xl" />
+                                <h2 className="text-2xl font-black text-gray-800 mb-2 text-center uppercase break-words w-full">QUANTAS PEÇAS?</h2>
+                                <input ref={inputRef} type="number" className="w-full text-center text-3xl p-4 bg-gray-100 rounded-2xl font-black uppercase mb-6 border-2 border-transparent focus:border-indigo-500 focus:bg-white transition-all" placeholder="1" value={tempData.currentItem.quantity} onChange={e => setTempData({...tempData, currentItem: {...tempData.currentItem, quantity: e.target.value}})} onKeyDown={e => e.key === 'Enter' && handleNext()} />
+                                <button onClick={handleNext} className="w-full bg-sky-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform">PRÓXIMO</button>
+                            </>
+                        );
+                    case 'ITEM_WIDTH':
+                         return (
+                            <>
+                                <Icon name="ruler-horizontal" size={48} className="text-indigo-600 mb-4 bg-indigo-100 p-3 rounded-2xl" />
+                                <h2 className="text-2xl font-black text-gray-800 mb-2 text-center uppercase break-words w-full">LARGURA (METROS)</h2>
+                                <input ref={inputRef} type="number" inputMode="decimal" className="w-full text-center text-3xl p-4 bg-gray-100 rounded-2xl font-black uppercase mb-6 border-2 border-transparent focus:border-indigo-500 focus:bg-white transition-all" placeholder="0.00" value={tempData.currentItem.width} onChange={e => setTempData({...tempData, currentItem: {...tempData.currentItem, width: e.target.value}})} onKeyDown={e => e.key === 'Enter' && handleNext()} />
+                                <button onClick={handleNext} className="w-full bg-sky-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform">PRÓXIMO</button>
+                            </>
+                        );
+                    case 'ITEM_LENGTH':
+                         return (
+                            <>
+                                <Icon name="ruler" size={48} className="text-indigo-600 mb-4 bg-indigo-100 p-3 rounded-2xl" />
+                                <h2 className="text-2xl font-black text-gray-800 mb-2 text-center uppercase break-words w-full">COMPRIMENTO (METROS)</h2>
+                                <input ref={inputRef} type="number" inputMode="decimal" className="w-full text-center text-3xl p-4 bg-gray-100 rounded-2xl font-black uppercase mb-6 border-2 border-transparent focus:border-indigo-500 focus:bg-white transition-all" placeholder="0.00" value={tempData.currentItem.length} onChange={e => setTempData({...tempData, currentItem: {...tempData.currentItem, length: e.target.value}})} onKeyDown={e => e.key === 'Enter' && handleNext()} />
+                                <button onClick={handleNext} className="w-full bg-sky-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform">PRÓXIMO</button>
+                            </>
+                        );
+                    case 'ITEM_PRICE':
+                         return (
+                            <>
+                                <Icon name="dollar-sign" size={48} className="text-green-600 mb-4 bg-green-100 p-3 rounded-2xl" />
+                                <h2 className="text-2xl font-black text-gray-800 mb-2 text-center uppercase break-words w-full">PREÇO DE VENDA (M²)</h2>
+                                <input ref={inputRef} type="number" inputMode="decimal" className="w-full text-center text-3xl p-4 bg-green-50 text-green-700 rounded-2xl font-black uppercase mb-6 border-2 border-transparent focus:border-green-500 focus:bg-white transition-all" placeholder="R$ 0,00" value={tempData.currentItem.price} onChange={e => setTempData({...tempData, currentItem: {...tempData.currentItem, price: e.target.value}})} onKeyDown={e => e.key === 'Enter' && handleNext()} />
+                                <button onClick={handleNext} className="w-full bg-green-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform">PRÓXIMO</button>
+                            </>
+                        );
+                    case 'ASK_COST':
+                        return (
+                            <>
+                                <Icon name="trending-down" size={48} className="text-red-600 mb-4 bg-red-100 p-3 rounded-2xl" />
+                                <h2 className="text-2xl font-black text-gray-800 mb-2 text-center uppercase break-words w-full">SABE O CUSTO?</h2>
+                                <p className="text-gray-400 text-xs font-bold mb-6 text-center break-words w-full">PARA CALCULAR SEU LUCRO</p>
+                                <button onClick={() => goToStep('ITEM_COST')} className="w-full bg-white border-2 border-gray-100 text-gray-800 py-4 rounded-2xl font-black text-lg mb-3 active:scale-95 transition-transform">SIM, INFORMAR CUSTO</button>
+                                <button onClick={saveItemAndContinue} className="w-full bg-sky-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform">NÃO, SALVAR E CONTINUAR</button>
+                            </>
+                        );
+                    case 'ITEM_COST':
+                         return (
+                            <>
+                                <Icon name="trending-down" size={48} className="text-red-600 mb-4 bg-red-100 p-3 rounded-2xl" />
+                                <h2 className="text-2xl font-black text-gray-800 mb-2 text-center uppercase break-words w-full">CUSTO (M²)</h2>
+                                <input ref={inputRef} type="number" inputMode="decimal" className="w-full text-center text-3xl p-4 bg-red-50 text-red-700 rounded-2xl font-black uppercase mb-6 border-2 border-transparent focus:border-red-500 focus:bg-white transition-all" placeholder="R$ 0,00" value={tempData.currentItem.cost} onChange={e => setTempData({...tempData, currentItem: {...tempData.currentItem, cost: e.target.value}})} onKeyDown={e => e.key === 'Enter' && saveItemAndContinue()} />
+                                <button onClick={saveItemAndContinue} className="w-full bg-red-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform">CONFIRMAR</button>
+                            </>
+                        );
+                    case 'LOOP_DECISION':
+                        return (
+                             <>
+                                <Icon name="check-circle" size={48} className="text-green-600 mb-4 bg-green-100 p-3 rounded-2xl" />
+                                <h2 className="text-2xl font-black text-gray-800 mb-2 text-center uppercase break-words w-full">PEÇA ADICIONADA!</h2>
+                                <button onClick={() => goToStep('MATERIAL_SELECT')} className="w-full bg-blue-50 text-blue-600 py-4 rounded-2xl font-black text-lg mb-3 border border-blue-100 active:scale-95 transition-transform flex items-center justify-center gap-2"><Icon name="plus" size={20}/> ADICIONAR OUTRA PEÇA</button>
+                                <button onClick={() => goToStep('SERVICE_DECISION')} className="w-full bg-sky-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform">AVANÇAR PARA SERVIÇOS</button>
+                            </>
+                        );
+
+                    // --- SERVIÇOS ---
+                    case 'SERVICE_DECISION':
+                        return (
+                             <>
+                                <Icon name="wrench" size={48} className="text-teal-600 mb-4 bg-teal-100 p-3 rounded-2xl" />
+                                <h2 className="text-2xl font-black text-gray-800 mb-2 text-center uppercase break-words w-full">SERVIÇOS / EXTRAS</h2>
+                                <p className="text-gray-400 text-xs font-bold mb-6 text-center break-words w-full">INSTALAÇÃO, FRETE ESPECÍFICO, FURO...</p>
+                                <button onClick={() => goToStep('SERVICE_NAME')} className="w-full bg-teal-50 text-teal-600 py-4 rounded-2xl font-black text-lg mb-3 border border-teal-100 active:scale-95 transition-transform flex items-center justify-center gap-2">SIM, ADICIONAR</button>
+                                <button onClick={() => goToStep('CLOSING_MARGIN')} className="w-full bg-sky-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform">NÃO, PULAR</button>
+                            </>
+                        );
+                    case 'SERVICE_NAME':
+                         return (
+                            <>
+                                <Icon name="wrench" size={48} className="text-teal-600 mb-4 bg-teal-100 p-3 rounded-2xl" />
+                                <h2 className="text-2xl font-black text-gray-800 mb-2 text-center uppercase break-words w-full">QUAL O SERVIÇO?</h2>
+                                <input ref={inputRef} list="wizard-services" className="w-full text-center text-lg p-4 bg-gray-100 rounded-2xl font-black uppercase mb-6 border-2 border-transparent focus:border-teal-500 focus:bg-white transition-all" placeholder="EX: INSTALAÇÃO" value={tempData.currentService.description} onChange={e => setTempData({...tempData, currentService: {...tempData.currentService, description: e.target.value.toUpperCase()}})} onKeyDown={e => e.key === 'Enter' && handleNext()} />
+                                <datalist id="wizard-services">{companyServices.map(s => <option key={s} value={s} />)}</datalist>
+                                <button onClick={handleNext} className="w-full bg-sky-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform">PRÓXIMO</button>
+                            </>
+                        );
+                    case 'SERVICE_QTD':
+                         return (
+                            <>
+                                <Icon name="hash" size={48} className="text-teal-600 mb-4 bg-teal-100 p-3 rounded-2xl" />
+                                <h2 className="text-2xl font-black text-gray-800 mb-2 text-center uppercase break-words w-full">QUANTIDADE</h2>
+                                <input ref={inputRef} type="number" className="w-full text-center text-3xl p-4 bg-gray-100 rounded-2xl font-black uppercase mb-6 border-2 border-transparent focus:border-teal-500 focus:bg-white transition-all" placeholder="1" value={tempData.currentService.quantity} onChange={e => setTempData({...tempData, currentService: {...tempData.currentService, quantity: e.target.value}})} onKeyDown={e => e.key === 'Enter' && handleNext()} />
+                                <button onClick={handleNext} className="w-full bg-sky-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform">PRÓXIMO</button>
+                            </>
+                        );
+                    case 'SERVICE_PRICE':
+                         return (
+                            <>
+                                <Icon name="dollar-sign" size={48} className="text-green-600 mb-4 bg-green-100 p-3 rounded-2xl" />
+                                <h2 className="text-2xl font-black text-gray-800 mb-2 text-center uppercase break-words w-full">PREÇO DE VENDA</h2>
+                                <p className="text-gray-400 text-xs font-bold mb-6 text-center break-words w-full">VALOR UNITÁRIO</p>
+                                <input ref={inputRef} type="number" inputMode="decimal" className="w-full text-center text-3xl p-4 bg-green-50 text-green-700 rounded-2xl font-black uppercase mb-6 border-2 border-transparent focus:border-green-500 focus:bg-white transition-all" placeholder="R$ 0,00" value={tempData.currentService.price} onChange={e => setTempData({...tempData, currentService: {...tempData.currentService, price: e.target.value}})} onKeyDown={e => e.key === 'Enter' && handleNext()} />
+                                <button onClick={handleNext} className="w-full bg-green-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform">PRÓXIMO</button>
+                            </>
+                        );
+                    case 'ASK_SERVICE_COST':
+                        return (
+                            <>
+                                <Icon name="trending-down" size={48} className="text-red-600 mb-4 bg-red-100 p-3 rounded-2xl" />
+                                <h2 className="text-2xl font-black text-gray-800 mb-2 text-center uppercase break-words w-full">TEM CUSTO?</h2>
+                                <button onClick={() => goToStep('SERVICE_COST')} className="w-full bg-white border-2 border-gray-100 text-gray-800 py-4 rounded-2xl font-black text-lg mb-3 active:scale-95 transition-transform">SIM, INFORMAR</button>
+                                <button onClick={saveServiceAndContinue} className="w-full bg-sky-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform">NÃO, SALVAR</button>
+                            </>
+                        );
+                    case 'SERVICE_COST':
+                         return (
+                            <>
+                                <Icon name="trending-down" size={48} className="text-red-600 mb-4 bg-red-100 p-3 rounded-2xl" />
+                                <h2 className="text-2xl font-black text-gray-800 mb-2 text-center uppercase break-words w-full">CUSTO UNITÁRIO</h2>
+                                <input ref={inputRef} type="number" inputMode="decimal" className="w-full text-center text-3xl p-4 bg-red-50 text-red-700 rounded-2xl font-black uppercase mb-6 border-2 border-transparent focus:border-red-500 focus:bg-white transition-all" placeholder="R$ 0,00" value={tempData.currentService.cost} onChange={e => setTempData({...tempData, currentService: {...tempData.currentService, cost: e.target.value}})} onKeyDown={e => e.key === 'Enter' && saveServiceAndContinue()} />
+                                <button onClick={saveServiceAndContinue} className="w-full bg-red-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform">CONFIRMAR SERVIÇO</button>
+                            </>
+                        );
+                     case 'SERVICE_LOOP_DECISION':
+                        return (
+                             <>
+                                <Icon name="check-circle" size={48} className="text-teal-600 mb-4 bg-teal-100 p-3 rounded-2xl" />
+                                <h2 className="text-2xl font-black text-gray-800 mb-2 text-center uppercase break-words w-full">SERVIÇO ADICIONADO!</h2>
+                                <button onClick={() => goToStep('SERVICE_NAME')} className="w-full bg-teal-50 text-teal-600 py-4 rounded-2xl font-black text-lg mb-3 border border-teal-100 active:scale-95 transition-transform flex items-center justify-center gap-2"><Icon name="plus" size={20}/> ADICIONAR OUTRO</button>
+                                <button onClick={() => goToStep('CLOSING_MARGIN')} className="w-full bg-sky-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform">IR PARA FECHAMENTO</button>
+                            </>
+                        );
+
+                    // --- FECHAMENTO ---
+                    case 'CLOSING_MARGIN':
+                         return (
+                            <>
+                                <Icon name="percent" size={48} className="text-blue-600 mb-4 bg-blue-100 p-3 rounded-2xl" />
+                                <h2 className="text-2xl font-black text-gray-800 mb-2 text-center uppercase break-words w-full">MARGEM DE LUCRO %</h2>
+                                <p className="text-gray-400 text-xs font-bold mb-6 text-center break-words w-full">ADICIONAL SOBRE MATERIAIS</p>
+                                <input ref={inputRef} type="number" inputMode="decimal" className="w-full text-center text-3xl p-4 bg-blue-50 text-blue-700 rounded-2xl font-black uppercase mb-6 border-2 border-transparent focus:border-blue-500 focus:bg-white transition-all" placeholder="0%" value={tempData.closing.margin} onChange={e => setTempData({...tempData, closing: {...tempData.closing, margin: e.target.value}})} onKeyDown={e => e.key === 'Enter' && handleNext()} />
+                                <button onClick={handleNext} className="w-full bg-sky-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform">PRÓXIMO</button>
+                                <button onClick={handleNext} className="mt-4 text-gray-400 font-bold text-xs">PULAR (0%)</button>
+                            </>
+                        );
+                    case 'CLOSING_LOSS':
+                         return (
+                            <>
+                                <Icon name="scissors" size={48} className="text-sky-600 mb-4 bg-sky-100 p-3 rounded-2xl" />
+                                <h2 className="text-2xl font-black text-gray-800 mb-2 text-center uppercase break-words w-full">PERDA TÉCNICA %</h2>
+                                <p className="text-gray-400 text-xs font-bold mb-6 text-center break-words w-full">SOBRA DE MATERIAL / QUEBRA</p>
+                                <input ref={inputRef} type="number" inputMode="decimal" className="w-full text-center text-3xl p-4 bg-sky-50 text-sky-700 rounded-2xl font-black uppercase mb-6 border-2 border-transparent focus:border-sky-500 focus:bg-white transition-all" placeholder="0%" value={tempData.closing.loss} onChange={e => setTempData({...tempData, closing: {...tempData.closing, loss: e.target.value}})} onKeyDown={e => e.key === 'Enter' && handleNext()} />
+                                <button onClick={handleNext} className="w-full bg-sky-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform">PRÓXIMO</button>
+                                <button onClick={handleNext} className="mt-4 text-gray-400 font-bold text-xs">PULAR (0%)</button>
+                            </>
+                        );
+                    case 'CLOSING_SHIPPING':
+                         return (
+                            <>
+                                <Icon name="truck" size={48} className="text-gray-600 mb-4 bg-gray-200 p-3 rounded-2xl" />
+                                <h2 className="text-2xl font-black text-gray-800 mb-2 text-center uppercase break-words w-full">FRETE / DESPESAS</h2>
+                                <p className="text-gray-400 text-xs font-bold mb-6 text-center break-words w-full">VALOR FIXO FINAL (R$)</p>
+                                <input ref={inputRef} type="number" inputMode="decimal" className="w-full text-center text-3xl p-4 bg-gray-100 text-gray-700 rounded-2xl font-black uppercase mb-6 border-2 border-transparent focus:border-gray-500 focus:bg-white transition-all" placeholder="R$ 0,00" value={tempData.closing.shipping} onChange={e => setTempData({...tempData, closing: {...tempData.closing, shipping: e.target.value}})} onKeyDown={e => e.key === 'Enter' && handleNext()} />
+                                <button onClick={handleNext} className="w-full bg-sky-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform">PRÓXIMO</button>
+                                <button onClick={handleNext} className="mt-4 text-gray-400 font-bold text-xs">PULAR (R$ 0,00)</button>
+                            </>
+                        );
+                    case 'CLOSING_PAYMENT':
+                         return (
+                            <>
+                                <Icon name="credit-card" size={48} className="text-emerald-600 mb-4 bg-emerald-100 p-3 rounded-2xl" />
+                                <h2 className="text-2xl font-black text-gray-800 mb-2 text-center uppercase break-words w-full">FORMA DE PAGAMENTO</h2>
+                                
+                                <div className="flex flex-wrap gap-2 justify-center mb-4 w-full">
+                                    {['DÉBITO', 'CRÉDITO', 'CHEQUE', 'DINHEIRO', 'PIX', 'TRANSFERÊNCIA', 'BOLETO'].map(opt => (
+                                        <button 
+                                            key={opt}
+                                            onClick={() => setTempData({...tempData, closing: {...tempData.closing, payment: opt}})}
+                                            className={`p-2 px-3 rounded-xl font-black text-[10px] uppercase border transition-all ${tempData.closing.payment === opt ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-gray-500 border-gray-200'}`}
+                                        >
+                                            {opt}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                <textarea ref={inputRef} className="w-full text-center text-lg p-4 bg-gray-100 rounded-2xl font-black uppercase mb-6 border-2 border-transparent focus:border-emerald-500 focus:bg-white transition-all h-32 resize-none pt-8" placeholder="OU DIGITE AQUI..." value={tempData.closing.payment} onChange={e => setTempData({...tempData, closing: {...tempData.closing, payment: e.target.value.toUpperCase()}})} />
+                                <button onClick={handleNext} className="w-full bg-sky-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform">PRÓXIMO</button>
+                                <button onClick={handleNext} className="mt-4 text-gray-400 font-bold text-xs">PULAR</button>
+                            </>
+                        );
+                    case 'CLOSING_OBS':
+                         return (
+                            <>
+                                <Icon name="message-square" size={48} className="text-purple-600 mb-4 bg-purple-100 p-3 rounded-2xl" />
+                                <h2 className="text-2xl font-black text-gray-800 mb-2 text-center uppercase break-words w-full">OBSERVAÇÕES</h2>
+                                <p className="text-gray-400 text-xs font-bold mb-6 text-center break-words w-full">COR, ACABAMENTO, DETALHES...</p>
+                                <textarea ref={inputRef} className="w-full text-center text-lg p-4 bg-gray-100 rounded-2xl font-black uppercase mb-6 border-2 border-transparent focus:border-purple-500 focus:bg-white transition-all h-32 resize-none pt-8" placeholder="ESCREVA AQUI..." value={tempData.closing.observations} onChange={e => setTempData({...tempData, closing: {...tempData.closing, observations: e.target.value.toUpperCase()}})} />
+                                <button onClick={handleNext} className="w-full bg-sky-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform">PRÓXIMO</button>
+                                <button onClick={handleNext} className="mt-4 text-gray-400 font-bold text-xs">PULAR</button>
+                            </>
+                        );
+                    case 'CLOSING_DELIVERY':
+                         return (
+                            <>
+                                <Icon name="calendar" size={48} className="text-indigo-600 mb-4 bg-indigo-100 p-3 rounded-2xl" />
+                                <h2 className="text-2xl font-black text-gray-800 mb-2 text-center uppercase break-words w-full">PRAZO DE ENTREGA</h2>
+                                <p className="text-gray-400 text-xs font-bold mb-6 text-center break-words w-full">EX: 15 A 20 DIAS ÚTEIS</p>
+                                <input ref={inputRef} className="w-full text-center text-xl p-4 bg-gray-100 rounded-2xl font-black uppercase mb-6 border-2 border-transparent focus:border-indigo-500 focus:bg-white transition-all" placeholder="DIGITE O PRAZO" value={tempData.closing.delivery} onChange={e => setTempData({...tempData, closing: {...tempData.closing, delivery: e.target.value.toUpperCase()}})} onKeyDown={e => e.key === 'Enter' && goToStep('SUMMARY')} />
+                                <button onClick={() => goToStep('SUMMARY')} className="w-full bg-green-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform">VER RESUMO / PRÉVIA</button>
+                                <button onClick={() => goToStep('SUMMARY')} className="mt-4 text-gray-400 font-bold text-xs">PULAR</button>
+                            </>
+                        );
+                    
+                    // --- RESUMO / PRÉVIA ---
+                    case 'SUMMARY':
+                        return (
+                            <>
+                                <Icon name="clipboard-check" size={48} className="text-sky-600 mb-4 bg-sky-100 p-3 rounded-2xl" />
+                                <h2 className="text-2xl font-black text-gray-800 mb-4 text-center uppercase break-words w-full">RESUMO DO ORÇAMENTO</h2>
+                                <div className="w-full bg-gray-50 p-4 rounded-2xl mb-6 text-left space-y-2 uppercase break-words">
+                                    <p><strong className="text-gray-400">CLIENTE:</strong> {tempData.clientName || 'NÃO INFORMADO'}</p>
+                                    <p><strong className="text-gray-400">ITENS:</strong> {tempData.items.length} MATERIAIS</p>
+                                    <p><strong className="text-gray-400">SERVIÇOS:</strong> {tempData.services.length} EXTRAS</p>
+                                    <hr className="border-gray-200 my-2"/>
+                                    <p><strong className="text-gray-400">MARGEM:</strong> {tempData.closing.margin || '0'}%</p>
+                                    <p><strong className="text-gray-400">FRETE:</strong> R$ {tempData.closing.shipping || '0,00'}</p>
+                                    <p><strong className="text-gray-400">PAGAMENTO:</strong> {tempData.closing.payment || 'A COMBINAR'}</p>
+                                    {tempData.closing.delivery && <p><strong className="text-gray-400">ENTREGA:</strong> {tempData.closing.delivery}</p>}
+                                    {tempData.closing.observations && <p><strong className="text-gray-400">OBS:</strong> {tempData.closing.observations}</p>}
+                                </div>
+                                <button onClick={finishWizard} className="w-full bg-green-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform animate-pulse">CONFIRMAR E GERAR</button>
+                            </>
+                        );
+
+                    default:
+                        return null;
+                }
+            };
+
+            return (
+                <div className="wizard-overlay">
+                    <div className="wizard-card flex flex-col items-center">
+                        {renderContent()}
+                        
+                        <div className="flex gap-4 w-full mt-6 justify-center">
+                             {stepHistory.length > 1 && (
+                                <button onClick={goBack} className="text-gray-300 font-bold text-[10px] uppercase tracking-widest flex items-center gap-1 hover:text-gray-500"><Icon name="arrow-left" size={14}/> VOLTAR</button>
+                             )}
+                            <button onClick={onClose} className="text-red-300 font-bold text-[10px] uppercase tracking-widest hover:text-red-500">CANCELAR</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+
+        // --- Componentes Existentes (Modal, Login, etc) ---
+        const CustomModal = ({ isOpen, title, message, onConfirm, onCancel, type = 'confirm' }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-[2.5rem] p-8 w-full max-w-sm shadow-2xl animate-fade-in space-y-6 border border-sky-50 text-center">
+                        <div className="space-y-2">
+                            <h3 className="text-lg font-black text-gray-800 uppercase tracking-tight">{title}</h3>
+                            <p className="text-sm text-gray-500 font-medium leading-relaxed">{message}</p>
+                        </div>
+                        <div className="flex gap-3">
+                            {type === 'confirm' && (
+                                <button onClick={onCancel} className="flex-1 py-4 bg-gray-100 text-gray-400 rounded-2xl font-black text-[10px] uppercase tracking-widest text-center">CANCELAR</button>
+                            )}
+                            <button onClick={onConfirm} className="flex-1 py-4 bg-sky-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-sky-200 text-center">CONFIRMAR</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const InstallPrompt = ({ deferredPrompt, isIOS }) => {
+            const [show, setShow] = useState(false);
+            useEffect(() => {
+                const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+                if (!isStandalone && (deferredPrompt || isIOS)) setShow(true);
+            }, [deferredPrompt, isIOS]);
+
+            if (!show) return null;
+
+            return (
+                <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-sky-100 p-4 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] z-[100] ios-toast pb-[env(safe-area-inset-bottom)]">
+                    <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-sky-100 p-2 rounded-xl text-sky-600"><Icon name="download" size={20}/></div>
+                            <div className="text-left">
+                                <p className="font-bold text-gray-800 text-xs uppercase">INSTALAR APP</p>
+                                <p className="text-[10px] text-gray-500 font-medium leading-tight">
+                                    {isIOS ? "Toque em Compartilhar e 'Adicionar à Tela de Início'" : "Instale para usar offline"}
+                                </p>
+                            </div>
+                        </div>
+                        {isIOS ? (
+                            <button onClick={() => setShow(false)} className="text-gray-400 font-black text-xs uppercase">OK</button>
+                        ) : (
+                            <button onClick={() => { deferredPrompt.prompt(); deferredPrompt.userChoice.then(() => setShow(false)); }} className="bg-sky-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg shadow-sky-200">INSTALAR</button>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const LoginScreen = () => {
+            const [mode, setMode] = useState('login'); 
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [newPassword, setNewPassword] = useState('');
+            const [oobCode, setOobCode] = useState('');
+            const [error, setError] = useState('');
+            const [message, setMessage] = useState('');
+            const [isSubmitting, setIsSubmitting] = useState(false);
+
+            useEffect(() => {
+                const params = new URLSearchParams(window.location.search);
+                const code = params.get("oobCode");
+                const modeParam = params.get("mode");
+                if (code && modeParam === "resetPassword") {
+                    setOobCode(code);
+                    setMode('update');
+                }
+            }, []);
+
+            const handleLogin = (e) => {
+                e.preventDefault(); setError(''); setIsSubmitting(true);
+                // Gera o ID da sessão ANTES de logar para garantir que esteja pronto quando o auth mudar
+                const newSessionId = Date.now().toString(); 
+                localStorage.setItem('marmo_session_id', newSessionId);
+
+                auth.signInWithEmailAndPassword(email, password)
+                    .then((userCredential) => {
+                        const user = userCredential.user;
+                        // Salva no banco. Se falhar, o login local ainda vale, mas pode conflitar se não atualizar o DB
+                        database.ref('sessions/' + user.uid).set({ sessionId: newSessionId });
+                    })
+                    .catch(() => { 
+                        // Se falhar o login, limpa o ID gerado
+                        localStorage.removeItem('marmo_session_id');
+                        setError("E-mail ou senha incorretos."); 
+                        setIsSubmitting(false); 
+                    });
+            };
+
+            const handleReset = (e) => {
+                e.preventDefault(); setError(''); setMessage(''); setIsSubmitting(true);
+                auth.sendPasswordResetEmail(email)
+                    .then(() => { setMessage("Link enviado."); setIsSubmitting(false); })
+                    .catch(() => { setError("Erro ao enviar."); setIsSubmitting(false); });
+            };
+
+            const handleUpdatePassword = (e) => {
+                e.preventDefault(); setError(''); setMessage(''); setIsSubmitting(true);
+                auth.confirmPasswordReset(oobCode, newPassword)
+                    .then(() => { setMessage("Senha redefinida!"); setIsSubmitting(false); setTimeout(() => { setMode('login'); window.history.replaceState({}, document.title, window.location.pathname); }, 3000); })
+                    .catch(() => { setError("Link expirado."); setIsSubmitting(false); });
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center bg-gray-100 p-6 font-black uppercase text-[10px]">
+                    <div className="bg-white p-10 rounded-[3rem] shadow-2xl w-full max-w-sm border border-white animate-fade-in space-y-8 text-center">
+                        <div className="flex flex-col items-center">
+                            <div className="inline-flex p-5 bg-sky-50 rounded-[2rem] text-sky-600 mb-4 shadow-sm"><Icon name="ruler" size={48}/></div>
+                            <h2 className="text-2xl font-black text-gray-800 tracking-tighter">ORÇAMARMO</h2>
+                        </div>
+                        {mode === 'login' && (
+                            <form onSubmit={handleLogin} className="space-y-4 text-left">
+                                <input type="email" placeholder="E-MAIL" inputMode="email" className="w-full p-4 bg-gray-50 border-none rounded-2xl outline-none font-bold focus:bg-sky-50 focus:text-sky-900 transition-colors" value={email} onChange={e => setEmail(e.target.value)} required />
+                                <input type="password" placeholder="SENHA" className="w-full p-4 bg-gray-50 border-none rounded-2xl outline-none font-bold focus:bg-sky-50 focus:text-sky-900 transition-colors" value={password} onChange={e => setPassword(e.target.value)} required />
+                                {error && <p className="text-red-500 text-center">{error}</p>}
+                                <button type="submit" disabled={isSubmitting} className="w-full bg-sky-600 text-white py-5 rounded-2xl shadow-xl active:scale-95 transition-all tracking-widest">{isSubmitting ? 'ENTRANDO...' : 'ENTRAR'}</button>
+                                <button type="button" onClick={() => setMode('reset')} className="w-full text-sky-500 hover:underline">ESQUECI A SENHA</button>
+                            </form>
+                        )}
+                        {mode === 'reset' && (
+                            <form onSubmit={handleReset} className="space-y-4 text-left">
+                                <h3 className="text-sm font-black text-gray-800 text-center uppercase">RECUPERAR</h3>
+                                <input type="email" placeholder="seu@email.com" inputMode="email" className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold" value={email} onChange={e => setEmail(e.target.value)} required />
+                                {message && <p className="text-green-600 text-center uppercase">{message}</p>}
+                                <button type="submit" disabled={isSubmitting} className="w-full bg-sky-600 text-white py-5 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-95 transition-all tracking-widest text-center uppercase">ENVIAR LINK</button>
+                                <button type="button" onClick={() => setMode('login')} className="w-full text-gray-400">VOLTAR</button>
+                            </form>
+                        )}
+                        {mode === 'update' && (
+                            <form onSubmit={handleUpdatePassword} className="space-y-4 text-left">
+                                <h3 className="text-sm font-black text-gray-800 text-center uppercase">NOVA SENHA</h3>
+                                <input type="password" placeholder="NOVA SENHA" className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold" value={newPassword} onChange={e => setNewPassword(e.target.value)} required minLength={6} />
+                                {message && <p className="text-green-600 text-center uppercase">{message}</p>}
+                                <button type="submit" disabled={isSubmitting} className="w-full bg-green-600 text-white py-5 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-95 transition-all tracking-widest text-center uppercase">SALVAR</button>
+                            </form>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [user, setUser] = useState(null);
+            const [authLoading, setAuthLoading] = useState(true);
+            const [deferredPrompt, setDeferredPrompt] = useState(null);
+            const [isIOS, setIsIOS] = useState(false);
+            const [isLoadingAPI, setIsLoadingAPI] = useState(false);
+            const [currentView, setCurrentView] = useState('editor');
+            const [modal, setModal] = useState({ open: false, title: '', message: '', onConfirm: null, type: 'confirm' });
+            const [showDelivery, setShowDelivery] = useState(false);
+            const [wizardOpen, setWizardOpen] = useState(false);
+
+            // Estados
+            const [company, setCompany] = useState(() => JSON.parse(localStorage.getItem('marmo_cfg_pro_v1') || '{"name":"","cnpj":"","phone":"","email":"","address":"","cep":"","logo":null,"materials":["GRANITO VERDE UBATUBA", "GRANITO PRETO SÃO GABRIEL", "MÁRMORE BRANCO", "QUARTZO STELLAR", "PRIME BRANCO"],"services":["ACABAMENTO 45º", "INSTALAÇÃO", "FURO DE CUBA", "RODAPIÉ/FRONTÃO", "FRETE"]}'));
+            const [history, setHistory] = useState(() => JSON.parse(localStorage.getItem('marmo_hist_pro_v1') || '[]'));
+            const [client, setClient] = useState({ name: '', doc: '', phone: '', email: '', cep: '', address: '' });
+            const [measuredItems, setMeasuredItems] = useState([]);
+            const [items, setItems] = useState([]);
+            const [totals, setTotals] = useState({ subtotal: 0, costTotal: 0, discount: '', discountPercent: '', shipping: '', technicalLoss: '', materialMarkup: '', final: 0 });
+            const [conditions, setConditions] = useState({ payment: '', observations: '', validity: '7', delivery: '' });
+            const [calc, setCalc] = useState({ material: '', width: '', length: '', priceM2: '', costM2: '', quantity: 1 });
+            const [calcMode, setCalcMode] = useState('m2'); 
+            const [newMaterial, setNewMaterial] = useState('');
+            const [newService, setNewService] = useState('');
+
+            const dilutionFactor = useMemo(() => {
+                return 1 + (Number(totals.materialMarkup || 0) / 100) + (Number(totals.technicalLoss || 0) / 100);
+            }, [totals.materialMarkup, totals.technicalLoss]);
+
+            const handleLogout = () => {
+                const user = auth.currentUser;
+                if (user) database.ref('sessions/' + user.uid).remove();
+                localStorage.removeItem('marmo_session_id');
+                auth.signOut().then(() => window.location.reload());
+            };
+
+            // Monitor de Sessão Única
+            useEffect(() => {
+                let sessionRef = null;
+                const unsubscribe = auth.onAuthStateChanged(u => {
+                    setUser(u); 
+                    setAuthLoading(false);
+                    
+                    if (u) {
+                        const localSession = localStorage.getItem('marmo_session_id');
+                        
+                        sessionRef = database.ref('sessions/' + u.uid);
+                        sessionRef.on('value', snapshot => {
+                            const data = snapshot.val();
+                            if (data && data.sessionId && localSession && data.sessionId !== localSession) {
+                                auth.signOut().then(() => {
+                                    alert('Sessão desconectada. Login realizado em outro dispositivo.');
+                                    window.location.reload();
+                                });
+                            }
+                        });
+                    } else {
+                        if (sessionRef) sessionRef.off();
+                    }
+                });
+
+                const handleBeforeInstall = (e) => { e.preventDefault(); setDeferredPrompt(e); };
+                window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+                setIsIOS(/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream);
+                
+                return () => { 
+                    unsubscribe(); 
+                    if (sessionRef) sessionRef.off();
+                    window.removeEventListener('beforeinstallprompt', handleBeforeInstall); 
+                };
+            }, []);
+
+            useEffect(() => { localStorage.setItem('marmo_cfg_pro_v1', JSON.stringify(company)); }, [company]);
+            useEffect(() => { localStorage.setItem('marmo_hist_pro_v1', JSON.stringify(history)); }, [history]);
+
+            // Handlers do Mago
+            const handleWizardFinish = (data) => {
+                setClient(prev => ({ ...prev, name: data.clientName, phone: data.clientPhone, doc: data.clientDoc }));
+                setMeasuredItems(prev => [...prev, ...data.items]);
+                setItems(prev => [...prev, ...data.services]);
+                setTotals(prev => ({
+                    ...prev,
+                    materialMarkup: data.closing.margin,
+                    technicalLoss: data.closing.loss,
+                    shipping: data.closing.shipping
+                }));
+                setConditions(prev => ({
+                    ...prev,
+                    payment: data.closing.payment,
+                    delivery: data.closing.delivery,
+                    observations: data.closing.observations
+                }));
+                if(data.closing.delivery) setShowDelivery(true);
+                
+                setModal({ open: true, title: 'SUCESSO!', message: 'Orçamento gerado! Revise os dados na tela.', onConfirm: () => setModal({open: false}), type: 'alert' });
+            };
+
+            const resizeImage = (file, maxWidth, callback) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.src = event.target.result;
+                    img.onload = () => {
+                        const elem = document.createElement('canvas');
+                        let width = img.width; let height = img.height;
+                        if (width > maxWidth) { height = Math.round((height * maxWidth) / width); width = maxWidth; }
+                        elem.width = width; elem.height = height;
+                        const ctx = elem.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        callback(elem.toDataURL('image/png', 0.8));
+                    }
+                }
+            };
+            const handleLogoUpload = (e) => { const file = e.target.files[0]; if(file) resizeImage(file, 300, (url) => setCompany(p => ({...p, logo: url}))); };
+            
+            const handleCEP = async (target, val) => {
+                const f = masks.cep(val);
+                if (target === 'client') setClient(p => ({...p, cep: f})); else setCompany(p => ({...p, cep: f}));
+                if (f.length === 9) {
+                    setIsLoadingAPI(true);
+                    try { const res = await fetch(`https://viacep.com.br/ws/${f.replace('-','')}/json/`); const d = await res.json(); if (!d.erro) { const a = `${d.logradouro}, ${d.bairro}, ${d.localidade}-${d.uf}`; if(target==='client') setClient(p=>({...p, address:a})); else setCompany(p=>({...p, address:a})); } } catch(e){}
+                    setIsLoadingAPI(false);
+                }
+            };
+
+            const handleCNPJ = async (target) => {
+                const docValue = target === 'client' ? client.doc : company.cnpj;
+                const clean = docValue.replace(/\D/g, '');
+                if (clean.length !== 14) return;
+                setIsLoadingAPI(true);
+                try {
+                    const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${clean}`);
+                    const data = await res.json();
+                    if (res.ok) {
+                        const addr = `${data.logradouro}, ${data.numero} - ${data.bairro}, ${data.municipio}-${data.uf}`;
+                        if (target === 'client') setClient(p => ({...p, name: data.razao_social, address: addr}));
+                        else setCompany(p => ({...p, name: data.razao_social, address: addr}));
+                    }
+                } catch(e){}
+                setIsLoadingAPI(false);
+            };
+
+            const realTimeCalc = useMemo(() => {
+                const w = parseFloat(String(calc.width).replace(',','.')) || 0;
+                const l = parseFloat(String(calc.length).replace(',','.')) || 0;
+                const p = parseFloat(String(calc.priceM2).replace(',','.')) || 0;
+                const q = Number(calc.quantity) || 1;
+                return { area: w * l, total: (calcMode === 'unit' ? p : w * l * p) * q };
+            }, [calc, calcMode]);
+
+            useEffect(() => {
+                const sMeasured = measuredItems.reduce((acc, i) => acc + ((i.isUnit ? 1 : i.area) * i.priceM2 * i.quantity), 0);
+                const sServices = items.reduce((acc, i) => acc + (Number(i.price || 0) * Number(i.quantity || 0)), 0);
+                const cMeasured = measuredItems.reduce((acc, i) => acc + ((i.isUnit ? 1 : (i.area || 0)) * (i.costM2 || 0) * i.quantity), 0);
+                const cItems = items.reduce((acc, i) => acc + (Number(i.cost || 0) * Number(i.quantity || 0)), 0);
+                
+                const totalBase = sMeasured + sServices;
+                const dilutedSubtotal = totalBase * dilutionFactor;
+                const discVal = parseFloat(totals.discount) || 0;
+                const finalVal = dilutedSubtotal + Number(totals.shipping || 0) - discVal;
+
+                setTotals(prev => ({ ...prev, subtotal: totalBase, costTotal: cMeasured + cItems, final: finalVal }));
+            }, [measuredItems, items, totals.technicalLoss, totals.shipping, totals.discount, totals.materialMarkup, dilutionFactor]);
+
+            const updateDiscount = (type, val) => {
+                const num = parseFloat(val) || 0;
+                const dilutedSubtotal = totals.subtotal * dilutionFactor;
+                if (type === 'percent') {
+                    const cash = dilutedSubtotal * (num / 100);
+                    setTotals(prev => ({ ...prev, discountPercent: val, discount: cash.toFixed(2) }));
+                } else {
+                    const percent = dilutedSubtotal > 0 ? (num / dilutedSubtotal) * 100 : 0;
+                    setTotals(prev => ({ ...prev, discount: val, discountPercent: percent.toFixed(2) }));
+                }
+            };
+
+            const saveToHistory = (silent = false) => {
+                const newEntry = {
+                    id: Date.now(),
+                    clientName: client.name || "NÃO INFORMADO",
+                    totalSale: totals.final || 0,
+                    profit: (totals.final || 0) - (totals.costTotal || 0),
+                    date: new Date().toISOString(),
+                    clientData: client, measuredItemsData: measuredItems, itemsData: items, totalsData: totals, conditionsData: conditions
+                };
+                setHistory(prev => [newEntry, ...prev]);
+                if (!silent) setModal({ open: true, title: 'SALVO!', message: 'Orçamento salvo.', onConfirm: () => setModal({open: false}), type: 'alert' });
+            };
+
+            const loadFromHistory = (h) => {
+                if (h.clientData) setClient(h.clientData); else setClient({name: h.clientName, phone:'', address:'', cep:'', doc:'', email:''});
+                if (h.measuredItemsData) setMeasuredItems(h.measuredItemsData); else setMeasuredItems([]);
+                if (h.itemsData) setItems(h.itemsData); else setItems([]);
+                if (h.totalsData) setTotals({...totals, ...h.totalsData});
+                if (h.conditionsData) { setConditions(h.conditionsData); setShowDelivery(!!h.conditionsData.delivery); }
+                setCurrentView('editor');
+            };
+
+            const generatePDF = () => {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                const primary = [14, 165, 233]; // Sky-500
+                const budgetNumber = history.length + 1;
+                const today = new Date().toLocaleDateString();
+                
+                doc.setFontSize(10); doc.setTextColor(100);
+                doc.text(`ORÇAMENTO Nº: ${budgetNumber}`, 195, 15, { align: 'right' });
+                doc.text(`DATA: ${today}`, 195, 20, { align: 'right' });
+
+                if (company.logo) { try { doc.addImage(company.logo, 'PNG', 15, 10, 30, 30); } catch(e){} }
+                
+                doc.setFontSize(18); doc.setTextColor(...primary); doc.setFont("helvetica", "bold");
+                const nameLines = doc.splitTextToSize(company.name || "ORÇAMARMO", 130);
+                doc.text(nameLines, 50, 20);
+                
+                let currentY = 20 + (nameLines.length * 7); 
+
+                doc.setFontSize(9); doc.setTextColor(100); doc.setFont("helvetica", "normal");
+                doc.text(`TEL: ${company.phone} | CNPJ: ${company.cnpj}`, 50, currentY);
+                
+                currentY += 5;
+                if (company.address) {
+                    const addressLines = doc.splitTextToSize(`END: ${company.address}`, 140);
+                    doc.text(addressLines, 50, currentY);
+                    currentY += (addressLines.length * 4);
+                } else {
+                    currentY += 5;
+                }
+                
+                const tableStartY = Math.max(currentY + 10, 50);
+
+                doc.autoTable({ 
+                    startY: tableStartY, 
+                    head: [['DADOS DO CLIENTE']], 
+                    body: [[`NOME: ${client.name}\nWHATSAPP: ${client.phone}\nENDEREÇO: ${client.address}`]], 
+                    theme: 'grid', headStyles: { fillColor: primary } 
+                });
+                
+                doc.text("MATERIAIS E PEÇAS", 15, doc.lastAutoTable.finalY + 10);
+                const materialRows = measuredItems.map(i => {
+                    const dilutedTotal = ((i.isUnit ? 1 : i.area) * i.priceM2 * i.quantity) * dilutionFactor;
+                    return [i.quantity, i.description, `${i.width}x${i.length}m${i.isUnit ? '' : ' (M²)'}`, `R$ ${dilutedTotal.toFixed(2)}`];
+                });
+                doc.autoTable({ startY: doc.lastAutoTable.finalY + 12, head: [['QTD', 'MATERIAL', 'MEDIDAS', 'TOTAL']], body: materialRows, headStyles: { fillColor: [40, 40, 40] } });
+
+                if (items.some(i => i.description)) {
+                    doc.text("SERVIÇOS E OUTROS", 15, doc.lastAutoTable.finalY + 10);
+                    const serviceRows = items.filter(i => i.description).map(i => {
+                        const dilutedTotal = (Number(i.price) * i.quantity) * dilutionFactor;
+                        return [i.description, i.quantity, `R$ ${dilutedTotal.toFixed(2)}`];
+                    });
+                    doc.autoTable({ startY: doc.lastAutoTable.finalY + 12, head: [['DESCRIÇÃO', 'QTD', 'TOTAL']], body: serviceRows, headStyles: { fillColor: [100, 100, 100] } });
+                }
+                
+                const subtotalDiluted = totals.subtotal * dilutionFactor;
+                doc.autoTable({ 
+                    startY: doc.lastAutoTable.finalY + 10, margin: { left: 110 },
+                    body: [
+                        ['SUBTOTAL', `R$ ${subtotalDiluted.toFixed(2)}`], 
+                        ['FRETE/DESPESAS (+)', `R$ ${Number(totals.shipping).toFixed(2)}`], 
+                        ['DESCONTO (-)', `R$ ${Number(totals.discount).toFixed(2)}`], 
+                        ['TOTAL FINAL', `R$ ${totals.final.toFixed(2)}`]
+                    ],
+                    theme: 'grid', didParseCell: (d) => { if(d.row.index === 3) { d.cell.styles.fillColor = primary; d.cell.styles.textColor = 255; d.cell.styles.fontStyle = 'bold'; } }
+                });
+                
+                doc.setFontSize(10); doc.setTextColor(0); doc.text("PAGAMENTO E OBSERVAÇÕES:", 15, doc.lastAutoTable.finalY + 15);
+                const vDays = parseInt(conditions.validity) || 7; const vDate = new Date(); vDate.setDate(vDate.getDate() + vDays);
+                let obs = `VALIDADE: ${conditions.validity} DIAS (Até ${vDate.toLocaleDateString()})\n`;
+                if(conditions.delivery) obs += `ENTREGA: ${conditions.delivery}\n`;
+                obs += `PAGAMENTO: ${conditions.payment}\nOBS: ${conditions.observations}`;
+                doc.setFont("helvetica", "normal"); doc.text(doc.splitTextToSize(obs, 180), 15, doc.lastAutoTable.finalY + 22);
+                
+                saveToHistory(true); 
+                doc.save(`Orcamento_${budgetNumber}_${client.name}.pdf`);
+            };
+
+            const handleWhatsApp = () => {
+                if (!client.phone) return setModal({ open: true, title: 'ATENÇÃO', message: 'Informe o WhatsApp.', onConfirm: () => setModal(prev => ({...prev, open: false})), type: 'alert' });
+                
+                const subtotalDiluted = totals.subtotal * dilutionFactor;
+                const budgetNumber = history.length + 1;
+                const today = new Date().toLocaleDateString();
+                const vDays = parseInt(conditions.validity) || 7; const vDate = new Date(); vDate.setDate(vDate.getDate() + vDays);
+
+                let msg = `*ORÇAMENTO Nº ${budgetNumber}* - ${today}\n*${company.name}*\n\n*CLIENTE:* ${client.name}\n\n*MATERIAIS:*\n`;
+                measuredItems.forEach(i => {
+                    const dilutedTotal = ((i.isUnit ? 1 : i.area) * i.priceM2 * i.quantity) * dilutionFactor;
+                    msg += `• ${i.quantity}x ${i.description} (${i.width}x${i.length}m${i.isUnit ? '' : ' - M²'}) - R$ ${dilutedTotal.toFixed(2)}\n`;
+                });
+
+                if (items.some(i => i.description)) {
+                    msg += `\n*SERVIÇOS E OUTROS:*\n`;
+                    items.forEach(i => {
+                        if(i.description) {
+                            const dilutedTotal = (Number(i.price) * i.quantity) * dilutionFactor;
+                            msg += `• ${i.description} (${i.quantity}x) - R$ ${dilutedTotal.toFixed(2)}\n`;
+                        }
+                    });
+                }
+                msg += `\nSubtotal: R$ ${subtotalDiluted.toFixed(2)}\nFrete: R$ ${Number(totals.shipping).toFixed(2)}\nDesconto: R$ ${Number(totals.discount).toFixed(2)}\n*TOTAL: R$ ${totals.final.toFixed(2)}*`;
+                msg += `\n\n*VALIDADE:* ${conditions.validity} Dias (Até ${vDate.toLocaleDateString()})`;
+                if(conditions.delivery) msg += `\n*ENTREGA:* ${conditions.delivery}`;
+                if(conditions.payment) msg += `\n*PAGAMENTO:* ${conditions.payment}`;
+                if(conditions.observations) msg += `\n*OBS:* ${conditions.observations}`;
+                
+                saveToHistory(true); 
+                window.open(`https://wa.me/55${client.phone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+            };
+
+            const exportHistory = () => {
+                const blob = new Blob([JSON.stringify(history)], {type: 'application/json'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = 'historico_marcenaria.json'; a.click();
+            };
+
+            const importHistory = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    try {
+                        const data = JSON.parse(ev.target.result);
+                        setHistory(data);
+                        setModal({ open: true, title: 'SUCESSO', message: 'Histórico importado com sucesso.', onConfirm: () => setModal({ open: false }), type: 'alert' });
+                    } catch (err) {
+                        setModal({ open: true, title: 'ERRO', message: 'Arquivo inválido.', onConfirm: () => setModal({ open: false }), type: 'alert' });
+                    }
+                };
+                reader.readAsText(file);
+            };
+
+            const exportConfig = () => {
+                const blob = new Blob([JSON.stringify(company)], {type: 'application/json'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = 'config_marcenaria.json'; a.click();
+            };
+
+            const importConfig = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    try {
+                        const data = JSON.parse(ev.target.result);
+                        setCompany(data);
+                        setModal({ open: true, title: 'SUCESSO', message: 'Configurações importadas.', onConfirm: () => setModal({ open: false }), type: 'alert' });
+                    } catch (err) {
+                        setModal({ open: true, title: 'ERRO', message: 'Arquivo inválido.', onConfirm: () => setModal({ open: false }), type: 'alert' });
+                    }
+                };
+                reader.readAsText(file);
+            };
+
+            if (authLoading) return <div className="min-h-screen flex items-center justify-center font-black text-sky-600 animate-pulse uppercase">CARREGANDO...</div>;
+            if (!user) return <LoginScreen />;
+
+            return (
+                <div className="min-h-screen pb-24 font-black uppercase text-[10px] text-left">
+                    <CustomModal isOpen={modal.open} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} onCancel={() => setModal({open: false})} type={modal.type} />
+                    <InstallPrompt deferredPrompt={deferredPrompt} isIOS={isIOS} />
+                    
+                    {/* WIZARD COMPONENT */}
+                    <WizardFlow 
+                        isOpen={wizardOpen} 
+                        onClose={() => setWizardOpen(false)} 
+                        onFinish={handleWizardFinish}
+                        companyMaterials={company.materials}
+                        companyServices={company.services}
+                    />
+
+                    <nav className="bg-white border-b sticky top-0 z-50 px-4 py-3 flex justify-between items-center shadow-sm">
+                        <div className="font-bold text-sky-600 flex items-center gap-2 text-lg"><Icon name="ruler" size={28}/> OrçaMarmo</div>
+                        <div className="flex gap-4 tracking-tighter overflow-x-auto scrollbar-hide text-left">
+                            <button onClick={() => setCurrentView('editor')} className={currentView === 'editor' ? 'text-sky-600 border-b-2 border-sky-600' : 'text-gray-400'}>ORÇAMENTO</button>
+                            <button onClick={() => setCurrentView('history')} className={currentView === 'history' ? 'text-sky-600 border-b-2 border-sky-600' : 'text-gray-400'}>HISTÓRICO</button>
+                            <button onClick={() => setCurrentView('reports')} className={currentView === 'reports' ? 'text-sky-600 border-b-2 border-sky-600' : 'text-gray-400'}>RELATÓRIOS</button>
+                            <button onClick={() => setCurrentView('setup')} className={currentView === 'setup' ? 'text-sky-600 border-b-2 border-sky-600' : 'text-gray-400'}>MARMORARIA</button>
+                        </div>
+                    </nav>
+
+                    <main className="max-w-4xl mx-auto p-4 space-y-6 animate-fade-in text-left">
+                        {currentView === 'editor' && (
+                            <div className="space-y-6 text-left">
+                                {/* WIZARD BUTTON */}
+                                <button onClick={() => setWizardOpen(true)} className="w-full bg-gradient-to-r from-sky-500 to-sky-600 text-white p-6 rounded-[2.5rem] shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all">
+                                    <div className="bg-white/20 p-2 rounded-full"><Icon name="wand-2" size={24} className="text-white"/></div>
+                                    <div className="text-left">
+                                        <p className="text-xl font-black uppercase">INICIAR MODO GUIADO</p>
+                                        <p className="text-[10px] font-medium opacity-80 uppercase">PREENCHA PASSO A PASSO (IDEAL PARA CELULAR)</p>
+                                    </div>
+                                </button>
+
+                                <div className="flex justify-between items-center gap-2">
+                                    <div className="flex gap-2">
+                                        <button onClick={() => { setClient({name:'', phone:'', address:'', cep:'', doc:'', email:''}); setMeasuredItems([]); setItems([]); setTotals({...totals, technicalLoss: '', shipping: '', discount: '', discountPercent: '', materialMarkup: ''}); setConditions({payment:'', observations:'', validity:'7', delivery:''}); setShowDelivery(false); }} className="bg-white border p-3 px-6 rounded-2xl text-gray-400 flex items-center gap-2 font-black active:bg-gray-100"><Icon name="rotate-ccw" size={14}/> LIMPAR</button>
+                                        <button onClick={() => saveToHistory(false)} className="bg-blue-50 border border-blue-100 p-3 px-6 rounded-2xl text-blue-600 flex items-center gap-2 font-black uppercase text-[10px] active:bg-blue-100"><Icon name="save" size={14}/> SALVAR</button>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:flex md:gap-2 w-full">
+                                        <button onClick={handleWhatsApp} className="bg-green-500 text-white p-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 font-black text-xs w-full md:w-auto md:px-8 active:scale-95 transition-transform"><WhatsAppIcon /> WHATSAPP</button>
+                                        <button onClick={generatePDF} className="bg-sky-600 text-white p-4 rounded-2xl font-black flex items-center justify-center gap-2 shadow-lg text-xs w-full md:flex-1 active:scale-95 transition-transform"><Icon name="file-text" size={18} /> GERAR PDF</button>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white p-8 rounded-[2.5rem] shadow-sm space-y-6 border border-white">
+                                    <h3 className="text-gray-400 border-b pb-2 tracking-widest flex items-center gap-2 uppercase font-black"><Icon name="user" size={14}/> CLIENTE</h3>
+                                    <div className="grid md:grid-cols-2 gap-4">
+                                        <div className="flex gap-2">
+                                            <input placeholder="CNPJ/CPF" inputMode="numeric" className="flex-1 p-3 bg-gray-50 rounded-xl font-bold" value={client.doc} onChange={e => setClient({...client, doc: e.target.value})} />
+                                            <button onClick={() => handleCNPJ('client')} className="bg-sky-50 text-sky-600 p-3 rounded-xl border border-sky-100"><Icon name="search" size={18}/></button>
+                                        </div>
+                                        <input placeholder="NOME DO CLIENTE" className="w-full p-3 bg-gray-50 rounded-xl font-bold uppercase" value={client.name} onChange={e => setClient({...client, name: e.target.value.toUpperCase()})} />
+                                        <input placeholder="WHATSAPP" inputMode="tel" className="w-full p-3 bg-gray-50 rounded-xl font-bold" value={client.phone} onChange={e => setClient({...client, phone: masks.phone(e.target.value)})} />
+                                        <div className="flex gap-2 text-left font-black uppercase">
+                                            <input placeholder="CEP" inputMode="numeric" className="w-24 p-3 bg-gray-50 rounded-xl font-bold" value={client.cep} onChange={e => handleCEP('client', e.target.value)} />
+                                            <input placeholder="ENDEREÇO" className="flex-1 p-3 bg-gray-50 rounded-xl font-bold uppercase" value={client.address} onChange={e => setClient({...client, address: e.target.value.toUpperCase()})} />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-sky-600 p-8 rounded-[2.5rem] text-white shadow-xl space-y-6">
+                                    <div className="flex justify-between items-center border-b border-sky-400 pb-2 font-black leading-tight">
+                                        <h3 className="tracking-widest flex items-center gap-2 uppercase"><Icon name="calculator" size={16}/> CALCULADORA MANUAL</h3>
+                                        <div className="flex items-center gap-3">
+                                            <button onClick={() => setCalcMode(calcMode === 'm2' ? 'unit' : 'm2')} className="bg-white/20 px-3 py-1 rounded-full text-[10px] font-black border border-white/30 hover:bg-white/30 transition-all uppercase">{calcMode === 'm2' ? 'M² (ÁREA)' : 'UN (PEÇA)'}</button>
+                                            <div className="flex gap-4 text-right">
+                                                <div><p className="text-[8px] opacity-70 uppercase">{calcMode === 'm2' ? 'M² PEÇA' : 'QTD'}</p><p className="text-xl font-black">{calcMode === 'm2' ? realTimeCalc.area.toFixed(2) : calc.quantity}</p></div>
+                                                <div><p className="text-[8px] opacity-70 text-yellow-300 uppercase">TOTAL R$</p><p className="text-2xl font-black text-yellow-300">R$ {realTimeCalc.total.toFixed(2)}</p></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <input placeholder="MATERIAL (EX: GRANITO SÃO GABRIEL)" className="w-full p-4 bg-sky-700 rounded-2xl border-none text-white font-black outline-none placeholder-sky-300 uppercase" value={calc.material} onChange={e => setCalc({...calc, material: e.target.value.toUpperCase()})} list="mat-list-editor" />
+                                    <datalist id="mat-list-editor">{company.materials.map(m => <option key={m} value={m}/>)}</datalist>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-left uppercase">
+                                        <div className="space-y-1"><p className="text-[8px] text-center opacity-70">LARG</p><input inputMode="decimal" className="w-full p-3 bg-sky-800 rounded-xl text-center font-black" value={calc.width} onChange={e => setCalc({...calc, width: e.target.value})} /></div>
+                                        <div className="space-y-1"><p className="text-[8px] text-center opacity-70">COMP</p><input inputMode="decimal" className="w-full p-3 bg-sky-800 rounded-xl text-center font-black" value={calc.length} onChange={e => setCalc({...calc, length: e.target.value})} /></div>
+                                        <div className="space-y-1"><p className="text-[8px] text-center opacity-70 text-yellow-300">{calcMode === 'm2' ? 'VEND/M2' : 'VEND/UN'}</p><input inputMode="decimal" className="w-full p-3 bg-sky-800 rounded-xl text-center text-yellow-300 font-black" value={calc.priceM2} onChange={e => setCalc({...calc, priceM2: e.target.value})} /></div>
+                                        <div className="space-y-1"><p className="text-[8px] text-center opacity-70 text-red-200">{calcMode === 'm2' ? 'CUST/M2' : 'CUST/UN'}</p><input inputMode="decimal" className="w-full p-3 bg-red-900/30 rounded-xl text-center font-black text-red-100" value={calc.costM2} onChange={e => setCalc({...calc, costM2: e.target.value})} /></div>
+                                    </div>
+                                    <button onClick={() => { if (!calc.material) return; setMeasuredItems([...measuredItems, { id: Date.now(), description: calc.material, width: parseFloat(calc.width) || 0, length: parseFloat(calc.length) || 0, area: realTimeCalc.area, priceM2: parseFloat(calc.priceM2), costM2: parseFloat(calc.costM2), quantity: 1, isUnit: calcMode === 'unit' }]); setCalc({ material: '', width: '', length: '', priceM2: '', costM2: '', quantity: 1 }); }} className="w-full p-5 bg-white text-sky-600 rounded-[1.5rem] font-black shadow-lg text-xs tracking-widest uppercase active:scale-95 transition-transform">ADICIONAR PEÇA AO ORÇAMENTO</button>
+                                </div>
+
+                                {measuredItems.length > 0 && (
+                                    <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-sm border border-white">
+                                        <div className="p-4 bg-gray-50 border-b tracking-widest text-gray-400 font-black uppercase">MATERIAIS REGISTRADOS</div>
+                                        {measuredItems.map(i => (
+                                            <div key={i.id} className="p-5 border-b last:border-0 flex justify-between items-center animate-fade-in text-left">
+                                                <div>
+                                                    <p className="font-black text-gray-800 text-sm uppercase">{i.description}</p>
+                                                    <div className="flex items-center gap-3 mt-1 font-black uppercase">
+                                                        <div className="flex items-center bg-gray-100 rounded-lg">
+                                                            <button onClick={() => setMeasuredItems(measuredItems.map(x => x.id === i.id ? {...x, quantity: Math.max(1, x.quantity - 1)} : x))} className="p-2 text-sky-600 font-black">-</button>
+                                                            <span className="px-2 font-black text-xs">{i.quantity}</span>
+                                                            <button onClick={() => setMeasuredItems(measuredItems.map(x => x.id === i.id ? {...x, quantity: x.quantity + 1} : x))} className="p-2 text-sky-600 font-black">+</button>
+                                                        </div>
+                                                        <span className="text-gray-400 font-bold">{i.width}x{i.length}m {i.isUnit && <span className="text-[9px] bg-sky-100 text-sky-600 px-1 rounded ml-1">UN</span>}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-6">
+                                                    <div className="text-right text-left"><p className="text-[8px] text-gray-400">VALOR (DILUÍDO)</p><p className="font-black text-sky-600 text-lg">R$ {( (i.isUnit ? 1 : i.area) * i.priceM2 * i.quantity * dilutionFactor).toFixed(2)}</p></div>
+                                                    <button onClick={() => setMeasuredItems(measuredItems.filter(x => x.id !== i.id))} className="text-red-200 hover:text-red-500"><Icon name="trash-2" size={20}/></button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                <div className="bg-white p-8 rounded-[2.5rem] shadow-sm space-y-6">
+                                    <h3 className="text-gray-400 border-b pb-2 tracking-widest flex justify-between items-center font-black uppercase">SERVIÇOS E OUTROS PRODUTOS <button onClick={() => setItems([...items, {id: Date.now(), description: '', quantity: 1, price: '', cost: ''}])} className="text-sky-600 text-[10px] uppercase font-black">+ ADICIONAR</button></h3>
+                                    <div className="space-y-4">
+                                        {items.map(i => (
+                                            <div key={i.id} className="grid grid-cols-2 md:grid-cols-12 gap-3 items-end border-b pb-4 md:border-none animate-fade-in text-left">
+                                                <div className="col-span-2 md:col-span-4 space-y-1"><label className="text-[8px] text-gray-400 ml-1 font-black uppercase">DESCRIÇÃO</label><input placeholder="EX: INSTALAÇÃO" className="w-full p-3 bg-gray-50 rounded-xl font-bold uppercase text-left" value={i.description} onChange={e => setItems(items.map(x => x.id === i.id ? {...x, description: e.target.value.toUpperCase()} : x))} list="serv-list-editor" /></div>
+                                                <div className="col-span-1 md:col-span-2 space-y-1 text-left uppercase font-black"><label className="text-[8px] text-gray-400 ml-1">QTD</label><div className="flex items-center bg-gray-50 rounded-xl h-[46px] text-left uppercase font-black"><button onClick={() => setItems(items.map(x => x.id === i.id ? {...x, quantity: Math.max(1, x.quantity - 1)} : x))} className="p-2 text-gray-400 flex-1 font-black">-</button><span className="flex-1 text-center font-bold">{i.quantity}</span><button onClick={() => setItems(items.map(x => x.id === i.id ? {...x, quantity: x.quantity + 1} : x))} className="p-2 text-gray-400 flex-1 font-black">+</button></div></div>
+                                                <div className="col-span-1 md:col-span-2 space-y-1 uppercase font-black text-left"><label className="text-[8px] text-sky-600 ml-1 font-black uppercase">VENDA R$ (BASE)</label><input placeholder="0,00" inputMode="decimal" className="w-full p-3 bg-sky-50/50 rounded-xl font-bold text-sky-600 text-left" value={i.price} onChange={e => setItems(items.map(x => x.id === i.id ? {...x, price: e.target.value} : x))} /></div>
+                                                <div className="col-span-1 md:col-span-2 space-y-1 uppercase font-black text-left"><label className="text-[8px] text-green-600 ml-1 font-black uppercase">TOTAL (DILUÍDO)</label><div className="w-full p-3 bg-green-50 rounded-xl font-bold text-green-600 text-left truncate">R$ {(Number(i.price) * i.quantity * dilutionFactor).toFixed(2)}</div></div>
+                                                <div className="col-span-1 md:col-span-2 space-y-1 uppercase font-black text-left"><label className="text-[8px] text-red-400 ml-1 font-black uppercase">CUSTO R$</label><input placeholder="0,00" inputMode="decimal" className="w-full p-3 bg-red-50/50 rounded-xl font-bold text-red-400 text-left" value={i.cost} onChange={e => setItems(items.map(x => x.id === i.id ? {...x, cost: e.target.value} : x))} /></div>
+                                                <div className="col-span-2 md:col-span-12 flex items-center justify-end"><button onClick={() => setItems(items.filter(x => x.id !== i.id))} className="w-full md:w-auto p-3 flex items-center justify-center text-red-200 hover:text-red-500 bg-red-50/30 md:bg-transparent rounded-xl"><Icon name="trash-2" size={18}/> REMOVER</button></div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <datalist id="serv-list-editor">{company.services.map(s => <option key={s} value={s}/>)}</datalist>
+                                </div>
+
+                                <div className="bg-white p-8 rounded-[2.5rem] shadow-sm space-y-6">
+                                    <h3 className="text-gray-400 border-b pb-2 tracking-widest font-black uppercase">FECHAMENTO</h3>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 uppercase font-black">
+                                        <div className="space-y-1 bg-blue-50 p-2 rounded-xl"><label className="text-[8px] text-blue-500 ml-2">MARGEM %</label><input type="number" inputMode="decimal" className="w-full p-2 bg-transparent rounded-xl font-black text-blue-600" placeholder="0%" value={totals.materialMarkup} onChange={e => setTotals({...totals, materialMarkup: e.target.value})} /></div>
+                                        <div className="space-y-1"><label className="text-[8px] text-gray-400 ml-2">PERDA TÉC %</label><input type="number" inputMode="decimal" className="w-full p-3 bg-sky-50 rounded-xl font-black text-sky-600" value={totals.technicalLoss} onChange={e => setTotals({...totals, technicalLoss: e.target.value})} /></div>
+                                        <div className="space-y-1"><label className="text-[8px] text-gray-400 ml-2">FRETE/OUTROS R$</label><input type="number" inputMode="decimal" className="w-full p-3 bg-gray-50 rounded-xl font-black" value={totals.shipping} onChange={e => setTotals({...totals, shipping: e.target.value})} /></div>
+                                        <div className="space-y-1"><label className="text-[8px] text-gray-400 ml-2">DESC R$</label><input type="number" inputMode="decimal" className="w-full p-3 bg-red-50 rounded-xl font-black text-red-600" value={totals.discount} onChange={e => updateDiscount('cash', e.target.value)} /></div>
+                                    </div>
+                                    
+                                    <div className="flex gap-4 items-center bg-gray-50 p-4 rounded-2xl">
+                                        <div className="flex-1 space-y-1">
+                                            <label className="text-[8px] text-gray-400 ml-2 font-black">VALIDADE (DIAS)</label>
+                                            <div className="flex items-center bg-white rounded-xl overflow-hidden border border-gray-100">
+                                                <button onClick={() => setConditions(prev => ({...prev, validity: Math.max(1, (parseInt(prev.validity)||0) - 1).toString()}))} className="p-3 px-4 text-sky-600 font-black bg-sky-50 active:bg-sky-100">-</button>
+                                                <input type="number" inputMode="numeric" className="w-full p-2 text-center font-black text-gray-700 outline-none" value={conditions.validity} onChange={e => setConditions({...conditions, validity: e.target.value})} />
+                                                <button onClick={() => setConditions(prev => ({...prev, validity: ((parseInt(prev.validity)||0) + 1).toString()}))} className="p-3 px-4 text-sky-600 font-black bg-sky-50 active:bg-sky-100">+</button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-gray-50 p-4 rounded-2xl space-y-3">
+                                        <div className="flex items-center justify-between" onClick={() => setShowDelivery(!showDelivery)}>
+                                            <span className="text-xs font-black text-gray-600 uppercase flex items-center gap-2">
+                                                <Icon name="truck" size={16} /> Incluir Prazo de Entrega?
+                                            </span>
+                                            <div className={`w-12 h-7 rounded-full p-1 transition-colors ${showDelivery ? 'bg-sky-500' : 'bg-gray-300'}`}>
+                                                <div className={`w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${showDelivery ? 'translate-x-5' : 'translate-x-0'}`} />
+                                            </div>
+                                        </div>
+                                        
+                                        {showDelivery && (
+                                            <input 
+                                                autoFocus
+                                                placeholder="EX: 15 A 20 DIAS ÚTEIS" 
+                                                className="w-full p-3 bg-white border border-gray-200 rounded-xl font-bold uppercase text-xs animate-fade-in"
+                                                value={conditions.delivery}
+                                                onChange={e => setConditions({...conditions, delivery: e.target.value.toUpperCase()})}
+                                            />
+                                        )}
+                                    </div>
+
+                                    <div className="grid md:grid-cols-2 gap-4 text-left font-black uppercase">
+                                        <input placeholder="CONDIÇÕES DE PAGAMENTO" className="w-full p-4 bg-sky-50 rounded-2xl font-bold outline-none uppercase text-xs" value={conditions.payment} onChange={e => setConditions({...conditions, payment: e.target.value.toUpperCase()})} />
+                                        <textarea placeholder="OBSERVAÇÕES (COR, ACABAMENTO...)" className="w-full p-4 bg-sky-50 rounded-2xl font-bold outline-none h-20 resize-none uppercase text-xs" value={conditions.observations} onChange={e => setConditions({...conditions, observations: e.target.value.toUpperCase()})} />
+                                    </div>
+                                </div>
+
+                                <div className="bg-slate-900 p-10 rounded-[3rem] text-white flex flex-col md:flex-row justify-between items-center gap-6 shadow-2xl uppercase">
+                                    <div className="space-y-1 text-center md:text-left font-black tracking-[0.2em]"><p className="text-slate-500 text-[8px]">VENDA TOTAL FINAL</p><p className="text-6xl md:text-7xl font-black tracking-tighter leading-none">R$ {totals.final.toFixed(2)}</p></div>
+                                    <div className="leading-none bg-slate-800 p-6 rounded-[2rem] border border-slate-700 text-center md:text-right font-black"><p className="text-slate-400 text-[8px] mb-2 uppercase">LUCRO ESTIMADO</p><p className="text-2xl font-black text-green-400">R$ {(totals.final - totals.costTotal).toFixed(2)}</p></div>
+                                </div>
+                            </div>
+                        )}
+
+                        {currentView === 'history' && (
+                            <div className="space-y-4 animate-fade-in text-left font-black uppercase">
+                                <div className="flex flex-col gap-4 bg-white p-6 rounded-[2rem] shadow-sm border border-white text-left uppercase font-black">
+                                    <h3 className="tracking-widest text-gray-400">HISTÓRICO</h3>
+                                    <div className="flex flex-wrap gap-2 text-left uppercase font-black">
+                                        <label className="flex-1 bg-sky-50 text-sky-600 p-3 rounded-2xl font-black border border-sky-100 cursor-pointer text-center text-[10px] uppercase font-black">IMPORTAR <input type="file" className="hidden" accept=".json" onChange={importHistory} /></label>
+                                        <button onClick={exportHistory} className="flex-1 bg-sky-600 text-white p-3 rounded-2xl text-[10px] font-black uppercase">EXPORTAR</button>
+                                        <button onClick={() => setModal({open:true, title:'LIMPAR?', message:'Eliminar histórico?', onConfirm: () => {setHistory([]); setModal({open:false})}})} className="flex-1 bg-red-50 text-red-500 p-3 rounded-2xl text-[10px] font-black uppercase">LIMPAR</button>
+                                    </div>
+                                </div>
+                                {history.map(h => (
+                                    <div key={h.id} className="bg-white p-6 rounded-[2.5rem] shadow-sm flex justify-between items-center border border-white animate-fade-in text-left font-black uppercase text-[10px]">
+                                        <div onClick={() => loadFromHistory(h)} className="cursor-pointer text-left w-full"><p className="font-black text-gray-800 text-sm uppercase">{h.clientName || "N/A"}</p><p className="text-gray-400 mt-1 font-bold text-[8px]">{new Date(h.date).toLocaleDateString()}</p></div>
+                                        <div className="flex items-center gap-6 text-right"><div><div className="text-sky-600 font-black text-xl leading-none">R$ {h.totalSale.toFixed(2)}</div><div className="text-green-500 font-black text-[10px] uppercase">LUCRO: R$ {(h.profit || 0).toFixed(2)}</div></div><button onClick={() => setHistory(history.filter(x => x.id !== h.id))} className="text-red-200 hover:text-red-500"><Icon name="trash-2" size={20}/></button></div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {currentView === 'reports' && (
+                            <div className="space-y-6 animate-fade-in text-left font-black uppercase text-[10px]">
+                                <div className="grid grid-cols-2 gap-4 text-left">
+                                    <div className="bg-white p-8 rounded-[2.5rem] shadow-sm space-y-2 text-left"><div className="text-gray-400 tracking-widest font-black text-[9px]">FATURAMENTO</div><div className="text-4xl font-black text-sky-600 tracking-tighter">R$ {history.reduce((a,b) => a + b.totalSale, 0).toFixed(2)}</div></div>
+                                    <div className="bg-white p-8 rounded-[2.5rem] shadow-sm space-y-2 text-left"><div className="text-gray-400 tracking-widest font-black text-[9px]">LUCRO LÍQUIDO</div><div className="text-4xl font-black text-green-500 tracking-tighter">R$ {history.reduce((a,b) => a + (b.profit || 0), 0).toFixed(2)}</div></div>
+                                </div>
+                                <div className="bg-slate-900 p-10 rounded-[3rem] text-white flex items-center justify-between text-left shadow-xl"><div className="space-y-1 text-left uppercase font-black"><div className="text-slate-400 tracking-widest text-[8px]">MARGEM MÉDIA</div><div className="text-7xl font-black tracking-tighter leading-none text-left">{history.length > 0 ? ((history.reduce((a,b) => a + (b.profit || 0), 0) / history.reduce((a,b) => a + b.totalSale, 0)) * 100).toFixed(1) : 0}%</div></div><Icon name="trending-up" size={64} className="text-green-400 opacity-20" /></div>
+                            </div>
+                        )}
+
+                        {currentView === 'setup' && (
+                            <div className="bg-white p-6 md:p-8 rounded-[3rem] shadow-sm space-y-8 border border-white text-left font-black uppercase tracking-widest uppercase font-black text-[10px]">
+                                <div className="flex justify-between items-center border-b pb-4 text-left font-black uppercase"><h3 className="text-gray-400 text-sm">MARMORARIA</h3><button onClick={handleLogout} className="text-red-500 font-black bg-red-50 p-3 px-6 rounded-2xl active:scale-95 transition-all text-left uppercase tracking-widest text-[10px]">SAIR</button></div>
+                                <div className="grid md:grid-cols-2 gap-8 text-left uppercase font-black">
+                                    <div className="space-y-6 text-left font-black">
+                                        <p className="text-xs text-gray-400 tracking-widest font-black uppercase">DADOS BÁSICOS</p>
+                                        <div className="h-48 bg-gray-50 border-4 border-dashed border-gray-200 rounded-[2.5rem] flex items-center justify-center relative overflow-hidden text-left shadow-inner">{company.logo ? <img src={company.logo} className="h-full w-full object-contain text-left" /> : <div className="text-gray-300 font-black text-center space-y-2 uppercase text-left font-black"><Icon name="image" size={40}/><p>ADICIONAR LOGO</p></div>}<input type="file" className="absolute inset-0 opacity-0 cursor-pointer text-left" accept="image/*" onChange={handleLogoUpload} /></div>
+                                        <input placeholder="NOME DA EMPRESA" className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-black text-left uppercase" value={company.name} onChange={e => setCompany({...company, name: e.target.value.toUpperCase()})} />
+                                        <div className="flex gap-2 text-left font-black"><input placeholder="CNPJ" inputMode="numeric" className="flex-1 p-4 bg-gray-50 rounded-2xl outline-none font-black text-left uppercase" value={company.cnpj} onChange={e => setCompany({...company, cnpj: masks.cnpj(e.target.value)})} /><button onClick={() => handleCNPJ('company')} className="bg-blue-50 text-blue-600 p-4 rounded-2xl active:scale-95 text-left font-black uppercase"><Icon name="search" size={20}/></button></div>
+                                        <input placeholder="WHATSAPP COMERCIAL" inputMode="tel" className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-black text-left uppercase" value={company.phone} onChange={e => setCompany({...company, phone: masks.phone(e.target.value)})} />
+                                        <div className="flex gap-2 text-left font-black uppercase">
+                                            <input placeholder="CEP" inputMode="numeric" className="w-24 p-3 bg-gray-50 rounded-xl font-bold" value={company.cep || ''} onChange={e => handleCEP('company', e.target.value)} />
+                                            <input placeholder="ENDEREÇO COMERCIAL" className="flex-1 p-3 bg-gray-50 rounded-xl font-bold uppercase" value={company.address || ''} onChange={e => setCompany({...company, address: e.target.value.toUpperCase()})} />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-6 text-left font-black">
+                                        <p className="text-xs text-gray-400 tracking-widest font-black uppercase font-black uppercase">MATERIAIS & SERVIÇOS</p>
+                                        <div className="space-y-4 text-left font-black uppercase">
+                                            <div className="flex gap-2 text-left uppercase font-black"><input placeholder="NOVO MATERIAL" className="flex-1 p-3 bg-gray-50 rounded-xl font-bold outline-none uppercase text-left uppercase font-black" value={newMaterial} onChange={e => setNewMaterial(e.target.value)} /><button onClick={() => { if(newMaterial) { setCompany({...company, materials: [...company.materials, newMaterial.toUpperCase()]}); setNewMaterial(''); } }} className="bg-sky-600 text-white p-3 rounded-xl text-left uppercase font-black"><Icon name="plus" size={20}/></button></div>
+                                            <div className="flex flex-wrap gap-2 text-left uppercase font-black">{company.materials.map(m => <span key={m} className="bg-sky-50 text-sky-600 p-2 px-3 rounded-xl text-[9px] flex items-center gap-2 shadow-sm text-left uppercase font-black uppercase font-black">{m} <button onClick={() => setCompany({...company, materials: company.materials.filter(x => x !== m)})} className="text-sky-300 text-left font-black uppercase font-black uppercase"><Icon name="x" size={12}/></button></span>)}</div>
+                                        </div>
+                                        <div className="space-y-4 text-left mt-4 border-t pt-4 font-black uppercase font-black uppercase">
+                                            <div className="flex gap-2 text-left uppercase font-black uppercase font-black"><input placeholder="NOVO SERVIÇO" className="flex-1 p-3 bg-gray-50 rounded-xl font-bold outline-none uppercase text-left font-black uppercase font-black" value={newService} onChange={e => setNewService(e.target.value)} /><button onClick={() => { if(newService) { setCompany({...company, services: [...company.services, newService.toUpperCase()]}); setNewService(''); } }} className="bg-sky-600 text-white p-3 rounded-xl text-left font-black uppercase font-black uppercase"><Icon name="plus" size={20}/></button></div>
+                                            <div className="flex flex-wrap gap-2 text-left uppercase font-black font-black uppercase">{company.services.map(s => <span key={s} className="bg-gray-100 text-gray-600 p-2 px-3 rounded-xl text-[9px] flex items-center gap-2 shadow-sm text-left uppercase font-black uppercase font-black">{s} <button onClick={() => setCompany({...company, services: company.services.filter(x => x !== s)})} className="text-gray-300 text-left font-black uppercase font-black uppercase"><Icon name="x" size={12}/></button></span>)}</div>
+                                        </div>
+                                    </div>
+                                    <div className="col-span-2">
+                                        <div className="flex gap-2 text-left uppercase font-black w-full">
+                                            <label className="flex-1 bg-sky-50 text-sky-600 p-3 rounded-2xl font-black border border-sky-100 cursor-pointer text-center text-[10px] uppercase font-black">IMPORTAR CONFIGURAÇÕES <input type="file" className="hidden" accept=".json" onChange={importConfig} /></label>
+                                            <button onClick={exportConfig} className="flex-1 bg-sky-600 text-white p-3 rounded-2xl text-[10px] font-black uppercase">EXPORTAR CONFIGURAÇÕES</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button onClick={() => setModal({ open: true, title: 'SALVO!', message: 'Dados atualizados com sucesso.', onConfirm: () => setModal({open: false}), type: 'alert' })} className="w-full bg-sky-600 text-white py-6 rounded-[2rem] font-black uppercase text-center shadow-xl active:scale-95 transition-all text-left uppercase tracking-widest text-[10px]">GUARDAR ALTERAÇÕES</button>
+                            </div>
+                        )}
+                    </main>
+
+                    {isLoadingAPI && (
+                        <div className="fixed inset-0 bg-white/60 backdrop-blur-md z-[300] flex items-center justify-center font-black uppercase text-left tracking-widest text-sky-600">
+                            <div className="w-16 h-16 border-8 border-sky-600 border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
